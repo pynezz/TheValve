@@ -57,14 +57,17 @@ func (a *Argon2) InitArgon(password string) Argon2 {
 
 	salt, err := generateRandomBytes(p.saltLength)
 
-	a.Salt = salt
+	fmt.Println("Generated salt: ", salt)
 
 	if err != nil {
 		fmt.Println("Error generating random bytes for salt")
 		panic(err)
 	}
 
-	hash, encodedHash, err := generateFromPassword(password, a.Params)
+	hash, encodedHash, err := generateFromPassword(password, p)
+
+	fmt.Println("Generated hash: ", hash)
+	fmt.Println("Generated encoded hash: ", encodedHash)
 
 	if err != nil {
 		panic(err)
@@ -74,10 +77,12 @@ func (a *Argon2) InitArgon(password string) Argon2 {
 	// b64Salt := base64.RawStdEncoding.EncodeToString(salt)
 	// b64Hash := base64.RawStdEncoding.EncodeToString(hash)
 
-	a.hash = hash
-	a.Params = *p
-	// a.encodedHash = fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, p.memory, p.iterations, p.parallelism, b64Salt, b64Hash)
-	a.encodedHash = encodedHash
+	a = &Argon2{
+		hash:        hash,
+		Params:      *p,
+		encodedHash: encodedHash,
+		Salt:        salt,
+	}
 
 	match, err := ComparePasswordAndHash(password, a.encodedHash)
 
@@ -87,9 +92,9 @@ func (a *Argon2) InitArgon(password string) Argon2 {
 	}
 
 	if match {
-		fmt.Println("Password and hash match")
+		fmt.Printf("\033[0;32m%s\033[0m\n", "Password and hash match")
 	} else {
-		fmt.Println("Password and hash do not match")
+		fmt.Printf("\033[0;31m%s\033[0m\n", "Password and hash do not match")
 	}
 
 	return *a
@@ -165,8 +170,8 @@ func NewArgon2() *Argon2 {
 	return &Argon2{}
 }
 
-func generateFromPassword(password string, p params) (hash []byte, encodedHash string, err error) {
-	fmt.Printf("Generating argon2 hash with password \033[1;36m%s\033[0m\n", password)
+func generateFromPassword(password string, p *params) (hash []byte, encodedHash string, err error) {
+	fmt.Printf("Generating argon2 hash with password \033[1;36m%s\033[0m and salt length: %v\n", password, p.saltLength)
 
 	// Generate a cryptographically secure random salt.
 	salt, err := generateRandomBytes(p.saltLength)
@@ -200,7 +205,7 @@ func generateFromPasswordWithSalt(password string, salt string, p *params) (hash
 
 func generateRandomBytes(n uint32) ([]byte, error) {
 	b := make([]byte, n)
-	_, err := rand.Read(b)
+	_, err := rand.Read(b) // Crypto secure random number generator
 	if err != nil {
 		return nil, err
 	}
