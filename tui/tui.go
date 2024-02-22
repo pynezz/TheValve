@@ -144,7 +144,7 @@ func (t *TUI) NewSection(v *vault.Vault) {
 	}
 
 	fmt.Print("Enter the secret key: ")
-	secretKey, err := reader.ReadString('\n')
+	secretKey, err := reader.ReadString('\n') // Password
 	if err != nil {
 		fmt.Println("Error reading the secret key")
 	}

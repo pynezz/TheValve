@@ -36,14 +36,15 @@ func GetParams() params {
 	}
 }
 
-func HashesMatch(password string, salt string) (bool, error) {
-	calculatedHash := argon2.IDKey([]byte(password), []byte(salt), 3, 64*1024, 2, 32)
-
+// HashesMatch compares a password and plaintext hash to validate the password
+func HashesMatch(password string, salt []byte) (bool, error) {
 	encodedHash := NewArgon2().GetPrintableKeyWithSalt(salt)
 
 	return ComparePasswordAndHash(password, encodedHash)
 }
 
+// InitArgon initializes the Argon2 hashing algorithm
+// May be in conjunction with the NewArgon2 function
 func (a *Argon2) InitArgon(password string) Argon2 {
 
 	p := &params{
@@ -63,7 +64,7 @@ func (a *Argon2) InitArgon(password string) Argon2 {
 		panic(err)
 	}
 
-	hash, encodedHash, err := generateFromPassword(password, p)
+	hash, encodedHash, err := generateFromPassword(password, a.Params)
 
 	if err != nil {
 		panic(err)
@@ -115,13 +116,13 @@ func (a *Argon2) InitArgonWithSalt(password string, salt string) Argon2 {
 	}
 
 	a.hash = hash
-	a.params = *p
+	a.Params = *p
 
 	return *a
 }
 
 func (a *Argon2) GetPrintableKey() string {
-	p := a.params
+	p := a.Params
 	salt, err := generateRandomBytes(p.saltLength)
 
 	if err != nil {
@@ -164,7 +165,7 @@ func NewArgon2() *Argon2 {
 	return &Argon2{}
 }
 
-func generateFromPassword(password string, p *params) (hash []byte, encodedHash string, err error) {
+func generateFromPassword(password string, p params) (hash []byte, encodedHash string, err error) {
 	fmt.Printf("Generating argon2 hash with password \033[1;36m%s\033[0m\n", password)
 
 	// Generate a cryptographically secure random salt.

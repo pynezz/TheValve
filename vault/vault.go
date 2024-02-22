@@ -30,13 +30,35 @@ var (
 	// Define magicNumber and separator as byte slices
 	magicNumber = []byte{0x24, 0xbe, 0xef}             // Equivalent to $beef
 	separator   = []byte{0x24, 0x2d, 0x2d, 0x2d, 0x24} // Equivalent to $---$
+
+	session = make(map[string]string) // The session is used to authenticate the user. Contains the owner, salt, nonce and argon2 parameters
 )
 
 // The Vault is the main struct, which contains all the sections
 // The Vault contains all the sections (the file)
 type Vault struct {
 	// The section is the value, the owner is the key. The owner is hashed with CRC32 for quick lookup
-	hashmap map[string]section
+	sections map[string]section
+}
+
+func (v *Vault) getSectionByOwner(owner string) section {
+	// Get the section by the owner
+	return v.sections[owner]
+}
+
+func (v *Vault) GetSectionCount() int {
+	// Get the count of the sections
+	return len(v.sections)
+}
+
+func (v *Vault) getSaltFromOwner(owner string) byteSlice {
+	// Get the salt from the owner
+	return v.sections[owner].salt
+}
+
+func (v *Vault) getNonceFromOwner(owner string) byteSlice {
+	// Get the nonce from the owner
+	return v.sections[owner].nonce
 }
 
 // The section contains the owner and the entries
@@ -79,10 +101,10 @@ type Vault struct {
 //
 // ...
 type section struct {
-	owner  owner
-	salt   byteSlice // The salt is used to regenerate the argon2 hash
-	nonce  byteSlice // The nonce (16 bytes) is used to decrypt the section and is stored as a base64 encoded string
-	argon2 params    // The argon2 parameters
+	owner      owner
+	salt       byteSlice // The salt is used to regenerate the argon2 hash
+	nonce      byteSlice // The nonce (16 bytes) is used to decrypt the section and is stored as a base64 encoded string
+	argon2Conf Argon2    // The argon2 parameters
 }
 
 // The owner represents a person who owns a section
@@ -132,7 +154,7 @@ func (s *section) newEntry(owner string, content map[string]string) {
 
 func (v *Vault) GetVaultCount() int {
 	// Get the count of the vault
-	return len(v.hashmap)
+	return len(v.sections)
 }
 
 func (s str) StrToBase64() string {
@@ -146,24 +168,25 @@ func (b byteSlice) BytesToBase64() string {
 }
 
 // Create a new section
-func (v *Vault) NewSection(sectionName string, ownerName string, password string, salt byteSlice, nonce byteSlice) string {
+func (v *Vault) NewSection(sectionName string, ownerName string, password string) string {
 	// Create a new section
 	s := section{
-		salt:  byteSlice(salt.BytesToBase64()),
-		nonce: byteSlice(nonce.BytesToBase64()),
+		salt:  byteSlice(v.getSaltFromOwner(ownerName)),
+		nonce: byteSlice(v.getNonceFromOwner(ownerName)),
 		owner: owner{
 			name:    ownerName,
 			entries: make(map[string]entry),
 		},
+		argon2Conf: NewArgon2().InitArgon(password),
 	}
 
 	// Add the section to the vault
-	v.hashmap[sectionName] = s
+	v.sections[ownerName] = s
 
 	return "success"
 }
 
-func (o *owner) ChangeSecretKey(newSecretKey string) error {
+func (o *section) ChangeSecretKey(newSecretKey string) error {
 	// Change the secret key of the owner
 	reader := bufio.Reader{}
 
@@ -175,7 +198,7 @@ func (o *owner) ChangeSecretKey(newSecretKey string) error {
 	}
 
 	// We check if it matches the stored secret key
-	match, err := generateFromPassword(oldSecretKey, o)
+	match, err := ComparePasswordAndHash(oldSecretKey, o.argon2Conf.encodedHash)
 	if err != nil {
 		errors.New(errMsg["3"])
 	}
@@ -201,7 +224,7 @@ func (o *owner) ChangeSecretKey(newSecretKey string) error {
 		return errors.New(errMsg["7"])
 	}
 
-	o.secretKey = NewArgon2().InitArgon(newSecretKey).EncodedHash
+	o.argon2Conf = NewArgon2().InitArgon(newSecretKey)
 
 	return nil
 }
@@ -216,9 +239,9 @@ func (s *section) encrypt() {
 
 func (v *entry) deleteEntry(s *section, entryName string) {
 	// Delete an entry from the section
-	for i, e := range s.entries {
+	for i, e := range s.owner.entries {
 		if e.owner == v.owner {
-			delete(s.entries, i)
+			delete(s.owner.entries, i)
 		}
 	}
 }

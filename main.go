@@ -31,9 +31,8 @@ func main() {
 
 	p := vault.NewArgon2().InitArgon(pass)
 
-	match, err := vault.ComparePasswordAndHash(pass, p.encodedHash)
-
-	printableKey := p.encodedHash
+	printableKey := p.GetPrintableKeyWithSalt(p.Salt)
+	match, err := vault.ComparePasswordAndHash(pass, printableKey)
 
 	fmt.Printf("Generated argon2 hash \033[0;35m%s\033[0m\n", printableKey)
 
